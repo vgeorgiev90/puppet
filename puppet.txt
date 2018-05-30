@@ -1,0 +1,435 @@
+################ Overview #################
+Puppet Puppet is an open-source software configuration management tool.
+It can remediate configuration drifts (If you change anything in a system managed by puppet it will be reverted back)
+Code is written inside of classes(modules), and they are assigned to nodes.
+
+Puppet agent - the software used to communicate with the puppet master to execute a run
+Puppet - core of the configuration managment platform, it consist of special programing language
+that describes desired system state and agent that can enforce desired state
+Facter - system profiling tool. The agent uses it to send important system info to puppet
+Hiera - hierarchical data lookup tool, it can be used to configure puppet classes
+MCollective - framework for building server orchestration or parallel job-execution systems
+Razor Server - PXE boot provisioning application that deploys bare metal systems
+PostgreSQL - database which is used by puppet
+ActiveMQ - message broker used by puppet
+Puppet orchestrator - allows to control rollout changes in the infrastructure
+PuppetDB - stored the compiled catalogs and settings
+
+Directories
+/opt/puppetlabs/sbin  -  binaries for puppet
+/etc/puppetlabs/code/environments/ENV/modules  -  main directory for puppet modules
+/etc/puppetlabs/puppet/ssl  -  certificates for nodes and master
+/opt/puppetlabs
+/etc/puppetlabs/enterprise/conf.d   - pe.conf location
+/etc/puppetlabs/puppet/autosign.conf  - whitelist hostnames for auto sign certs.
+
+Classification can be done also in site.pp file
+#classes can be included or declared as class in site.pp 
+#(same include can be declared multiple times, classes are singletons - can be declared only once)
+Examples:
+
+#regex
+node /node2$/ {
+  class { 'apache': }
+  class { 'ntp': }
+  notify { 'This is a notification from regex definition': }
+}
+
+#node definition
+node 'server.puppet-node2' {
+  notify { "This is a simple node definition in site.pp": }
+}
+
+
+Services:
+pe-activemq                 - activemq message server that mcollective is using
+pe-console-services         - puppet managment console
+pe-puppetserver             - puppet master server
+pe-nginx                    - reverse proxy for pe console
+mcollective                 - mcollective daemon run on all nodes
+pe-puppet                   - puppet agent that run on every agent node
+pe-puppetdb,pe-postgresql   - database components
+pe-orchestration-service    - runs the orchestration process
+
+
+#External Node Clasifier (ENC)
+#settings
+node_terminus - tells puppet what the enc it will be using
+#default = claassifier 
+external_nodes - path to the executable for enc
+hiera_include - using hiera as an ENC 
+
+################## Install ##################
+Selinux must be in permissive, disabled mode
+
+Ports needed:
+8140 - puppet agent
+61613 - MCollective
+3000  - port for web based install
+5432 - postgresql (for split install)
+8081 - puppetDB
+
+#Open source
+Add the puppet repository
+rpm -ivh https://yum.puppetlabs.com/puppetlabs-release-el-7.noarch.rpm
+
+Master
+yum install puppetserver
+Node
+yum install puppet
+
+Modify /etc/hosts and include entries for the master and nodes (If there is no DNS configured )
+modify /etc/puppet/puppet.conf and include for the master
+dns_alt_names = puppet,puppet.example.com  (all the names that the master will reply to)
+
+Modify /etc/puppet/puppet.conf and include for the agent
+server=your.puppet.master
+
+https://docs.puppet.com/puppet/3.8/config_file_main.html
+
+Configure memory allocation (optional)
+/etc/sysconfig/puppetserver
+JAVA_ARGS="-Xms3g -Xmx3g"   # For 3 GB RAM
+
+Proceed with configuration
+puppet master --verbose --no-daemonize
+
+Node
+systemctl start puppet
+#generate a certificate for the Puppet master to sign
+puppet agent -t
+
+Master
+systemctl start puppetserver
+puppet cert list
+puppet cert sign hostname.example.com
+#--all  -  sign all certificates
+
+#Enterprise
+Alternatively download the puppet enterprise installer
+create pe.conf as follows
+{
+  "console_admin_password": "admin1234",
+  "puppet_enterprise::puppet_master_host": "rgenupula1.mylabserver.com",
+  "pe_install::puppet_master_dnsaltnames": [
+    "puppet",
+    "master",
+    "rgenupula1"
+  ],
+  "puppet_enterprise::use_application_services": true
+}
+
+run the installer with -c /path/to/pe.conf
+
+Basic configuration options for agent
+ca_server    - server used for CA requests
+certname     - certificate name to use when comunicating with the master
+server       - hostname of the puppet master
+environment  -  env to use (default to production)
+noop         - simulate changes (dry run)
+priority     - sets the nice command so the catalog do no use too much CPU
+report       - determines if reporting is enabled
+runinterval  - how often to execute puppet run
+
+In order for puppet agent to be installed on OS different than the puppet master, you will have to include
+pe_repo::platform::yourOS   class in your puppet master configuration (Classification tab in the console)
+
+
+################## Manifests example ##################
+#Basic resource types usage
+/etc/puppetlabs/code/environments/ENV/manifests/admin.pp
+
+group {'viktor-group':
+  ensure => present,
+}
+
+user {'viktor':
+  ensure     => present,
+  home       => '/home/viktor',
+  managehome => true,
+  gid        => 'viktor-group',
+  shell      => '/bin/bash',
+}
+
+notify {'User created already':}
+
+file {'/root/puppet-test-file':
+  ensure      => file,directory,symlink,absent
+  mode        => '0444',
+  name		  => '/some/path/and/name/for/the/file'
+  source      => '/some/source/for/file',
+  destination => '/some/destination/for/symlink'
+  content     => 'Puppet created test file',
+  owner       => 'viktor',
+  group       => 'root',
+  source      => 'puppet:///modules/mod-name/file-name'
+}
+
+service {'sshd':
+    ensure  =>  running,
+	enable  =>  true,
+}
+
+package {'httpd':
+  ensure => present,
+}
+################## Puppet Modules #####################
+
+#Modules are self-container bundles of code used to manage a SINGLE piece of technology
+#Classes namespaces are separated by :: (apache::install, apache::mod::proxy)
+#Generate a module
+#Facter can be used to gather facts about the system and use them in a module (facter command on agent)
+#Facter looks in the following directories for external facts in a name facts.txt
+#/opt/puppetlabs/facter/facts.d  , /etc/puppetlabs/facter/facts.d, /etc/facter/facts.d
+
+puppet module generate MAINTAINER-MODULE_NAME
+
+# The module directory will include: manifests,files,templates,lib,facts.d,examples,spec,functions,types
+manifests - all of the manifests for the module
+file      - static content for the module
+lib       - contains plugins
+examples  - contains examples showing how to declare data
+
+
+################## Puppet DSL  ##########################
+#For puppet less than 4.9 use params.pp pattern to declare variables, for 4.9 and grater you should use Hiera
+#Resource types are the basic building block of the DSL
+#Every resource type has a title and set of parameters(attributes) that describe the disered state
+<Type> {'<Name>':
+  <Atribute>  =>  <Value>,
+}
+#ensure attribute is always at the top of the definition
+
+#Chaining resources, -> and ~> can be used for this purpose.
+#->   -   applies the resource on the left before the one on the right
+#~>   -   if the left resource make changes , notify and refresh the one on the right
+
+
+#Resource metaparameters
+require: referenced resource to be applied first
+before:  request to be applied before the referenced resource
+subscribe: listen for Puppet changes to the referenced resource
+notify:   send a notification when Puppet changes the resource
+#Capital letter for referensing the resource
+#examples:
+package {'ssh': ensure => present, before => Service['sshd']}
+package {'ssh': ensure => present,}  
+service {'sshd': ensure => running, require => Package['ssh'],}
+##
+file {'/etc/sshd_config': ensure => file,}
+service {'sshd': ensure => running, subscribe => File['/etc/sshd_config']}
+
+
+#Case statement example
+case $facts['os']['family'] {
+  'RedHat': {$ssh_name = 'sshd'}
+  'Debian': {$ssh_name = 'ssh'}
+  'default': {Warning("Os not supported")}
+}
+
+#Conditional statements
+$apache = true
+if $apache {
+  file {'/etc/motd': ensure => present, content => 'Apache web server',}
+} else {
+  file {'/etc/motd': ensure => presemt, content => 'There is no apache',}
+}
+
+#Negative if: unless
+unless $memorytotal > 1024 {
+  $maxclient = 300
+}
+
+#Facter usage
+notify { "OS is ${::facts['operatingsystem']}" }
+
+#Templates
+#template file must be located in modules-dir/module/templates/file.erb
+#erb is the languge for the template
+
+#Function data provider
+# Change metadata.json
+# "data_provider": "function"
+# create /module/functions/data.pp
+# this file return hash object
+#example:
+
+# ntp/functions/data.pp
+function ntp::data() {
+  $base_params = {
+    'ntp::autoupdate'   => false,
+    'ntp::service_name' => 'ntpd',
+  }
+#and in init.pp
+# ntp/manifests/init.pp
+class ntp (
+  # default values are in ntp/functions/data.pp
+  $autoupdate
+  $service_name
+) {
+ ...
+}
+#To call and use the variable in /manifests/file.pp
+class ntp::file {
+  file { '/root/data-check':
+    ensure => file,
+    content => $test_data::user,
+  }
+}
+  
+#Create resource function example
+$messages = {
+  'message1' => {
+    'name'    => 'name1',
+	'message' => 'message1'
+  }
+  'message2' => {
+    'name'    => 'name2',
+	'message' => 'message2'
+  }
+}
+create_resource(notify, $messages)
+# 1st arg - class, 2nd arg - params that the class accept
+
+#Iteration and Loops
+#example:
+$values = ['a','b','c','d']
+$values.each |String $value| {
+  notify { $value: 
+    message => "Value from the loop is: ${value}"
+  }
+}
+# Slice example
+$values.slice(2) |$value| {
+  notify { "Value is: ${value}": }
+}
+
+#Define types(resources)
+#example
+define show_message(
+  String $message
+){
+  notify { $title:
+    message => $message,
+  }
+}
+
+
+#Resource collector
+# used to override defined resources
+User <| group == 'admin' |> {
+  shell => /sbin/nologin,
+}
+
+File <| title == 'test.txt' |> {
+  content => 'Test content'
+}
+
+#Selector
+$file_mode = $facts['os']['family'] ? {
+'Debian' => '0007',
+'RedHat' => '0776',
+default => '0700',
+}
+
+#Exported Resources
+class ssh {
+#Declare:
+@@ sshkey {
+  type => rsa,
+  key  => $::sshrsakey
+}
+#Collect:
+Sshkey <<||>>
+}
+
+############## Puppet Hiera #############
+#Key value store for storing node specific data
+config file is /etc/puppetlabs/puppet/hiera.yaml
+#.:backends: tells Hiera what kind of data source it should process
+#default yaml
+#:datadir: tells Hiera the location of the data source
+#:hierarchy: configures the data sources to be used
+common.yaml
+---
+key: value
+
+notify { 'title':
+message => hiera(key)
+}
+
+#example hiera.yaml
+---
+version: 5
+defaults:
+  datadir: /etc/puppetlabs/code/environments/%{::environment}/hieradata
+  data_hash: yaml_data
+hierarchy:
+  - name: "Per-node data (yaml version)"
+    path: "nodes/%{::trusted.certname}.yaml"
+  - name: "Kubernetes file"
+    path: "kube/kubernetes.yaml"
+  - name: "Other YAML hierarchy levels"
+    paths:
+      - "common.yaml"
+
+################## Code managment ###################
+Code manager an dr10k are used to manage and deploy puppet code
+
+to initialize it go to the console
+class puppet_enterprise::profile::master
+set parameters
+r10k_remote                 = your git hub repo
+code_manager_auto_configure = true
+r10k_private_key            = /path/to/private/key
+
+#r10k key
+#cd /etc/puppetlabs/puppetserver
+#mkdir ssh
+#ssh-keygen -t rsa -b4096 -C "description"
+#chown -R pe-puppet: /etc/puppetlabs/puppetserver/ssh
+
+#Create deploy user and add him to code deployers group
+#generate token for the deply user
+puppet-access login --service-url https://puppet-master:4433/rbac-api --lifetime 365
+
+#To verify it
+r10k deploy display --fetch
+
+#to deploy your code
+puppet-code deploy master --wait
+
+#Module can be specified in the Puppetfile
+
+################## Commands and Usage ###################
+
+puppet config set SETTING VALUE --section SECTION
+#example: puppet config set runinterval 15m --section main
+# print  - to print all config options
+
+puppet cert list -a
+puppet cert clean CERT
+puppet cert sign CERT
+# -a   for all
+
+#Apply catalog
+puppet apply /path/to/file.pp
+
+#Validate puppet code
+puppet parser validate file.pp
+
+#Modules
+puppet module install puppetlabs-apache --version 3.1.0
+
+
+#Informational
+puppet resource NAME
+#-t  all types
+#puppet resource user
+puppet describe RESOURCE
+#-l  to list all
+
+
+# Puppet agent
+puppet agent -t
+# --environment ENV  -- to specify environment
