@@ -1,13 +1,16 @@
 ---
 
-
+## Add this file to your hierarchy and modify as needed
+## package and service name , mysql root pass
 mysql::package: mariadb-server
 mysql::service: mariadb
 mysql::password: viktor123
 
+#details for the user to be created
 mysql::user:
   name: wordpress
   host: localhost
-  password: *C260A4F79FA905AF65142FFE0B9A14FE0E1519CC
+  password: wordpress
 
+#Database to be created along with necessary permissions for the user
 mysql::database: wordpress
