@@ -1,0 +1,19 @@
+#!/bin/bash
+
+echo "Provide secondary password: "
+read -s sec_pass
+pass='<%= @shell_sec_pass %>'
+
+
+if [ ${sec_pass} == ${pass} ];then
+
+exec /bin/bash
+
+else
+
+echo "Wrong password provided.."
+exit
+
+fi
+
+

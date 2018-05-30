@@ -1,0 +1,9 @@
+FROM centos:latest
+
+RUN rpm -ivh https://yum.puppetlabs.com/puppetlabs-release-el-7.noarch.rpm
+RUN yum -y install puppet
+
+
+
+ENTRYPOINT puppet config set certname $HOSTNAME --section main && puppet config set server puppet --section main && echo "$MASTER_IP puppet" >> /etc/hosts && puppet agent -t && while true;do /bin/sleep 1;done
+

@@ -1,0 +1,8 @@
+#!/bin/bash
+
+mysql=`which mysql`
+
+echo "create database <%= @database %>;" | $mysql
+echo "create user '<%= @user['name' ]%>'@'<%= @user['host'] %>' identified by password '<%= @user['password'] %>';" | $mysql
+echo "grant all privileges on <%= @database %>.* to '<%= @user['name' ]%>'@'<%= @user['host'] %>';" | $mysql
+

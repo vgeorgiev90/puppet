@@ -1,0 +1,11 @@
+---
+
+docker_package: docker-ce
+packages:
+  - yum-utils
+  - device-mapper-persistent-data
+  - lvm2
+
+docker_service: docker
+swarm_ip: 192.168.55.150
+swarm_token: 'Swarm join token not provided , either provide it in the PE console or change it in hiera'

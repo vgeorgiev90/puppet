@@ -1,0 +1,7 @@
+#Kernel options enabled
+
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+kernel.exec-shield = 1
+net.ipv4.tcp_syncookies = 1
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+kernel.pid_max = 65536

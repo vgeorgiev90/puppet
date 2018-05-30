@@ -1,0 +1,16 @@
+<VirtualHost *:<%= @port %>>
+
+   ServerAdmin admin@<%= @servername %>
+   DocumentRoot "<%= @docroot %>"
+   ServerName <%= @servername %>
+
+
+  <Proxy "unix:/var/run/php-fpm/<%= @phpversion %>.sock|fcgi://<%= @phpversion %>-fpm">
+     ProxySet disablereuse=off
+  </Proxy>
+
+  <FilesMatch \.php$>
+     SetHandler proxy:fcgi://<%= @phpversion %>-fpm
+  </FilesMatch>
+
+</VirtualHost>
